@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_NAME="HyperKey"
 BUNDLE_ID="com.sergey.hyperkey"
-VERSION="0.1.6"
+VERSION="0.1.7"
 ICON_FILE="Resources/HyperKey.icns"
 APP_DIR="$APP_NAME.app"
 

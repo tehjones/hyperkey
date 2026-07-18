@@ -44,9 +44,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        permissionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.refreshPermissionState()
         }
+        RunLoop.main.add(timer, forMode: .common)
+        permissionTimer = timer
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -397,7 +399,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             Diagnostics.permission("settings-deactivated")
             refreshPermissionState()
-            if isAccessibilityTrusted && !isActive && isRelaunchPending {
+            if !isActive && (isAccessibilityTrusted || hasRequestedAccessibility) {
+                didObserveSystemSettings = false
+                Diagnostics.permission(
+                    "settings-closed relaunch-required trusted=\(isAccessibilityTrusted) requested=\(hasRequestedAccessibility)"
+                )
                 scheduleRelaunch(after: 0.3)
             } else {
                 didObserveSystemSettings = false

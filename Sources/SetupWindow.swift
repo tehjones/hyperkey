@@ -111,7 +111,7 @@ struct SetupView: View {
             return "Accessibility is allowed, but HyperKey couldn’t start."
         }
         if hasRequestedAccessibility {
-            return "In System Settings, turn HyperKey on. If it’s already on, toggle it off and on again."
+            return "In System Settings, turn HyperKey on. If it isn’t listed, click + and choose HyperKey from Applications."
         }
         return "HyperKey uses Accessibility only to handle your keyboard shortcuts."
     }
