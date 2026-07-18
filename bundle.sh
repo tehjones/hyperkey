@@ -4,6 +4,7 @@ set -euo pipefail
 APP_NAME="HyperKey"
 BUNDLE_ID="com.sergey.hyperkey"
 VERSION="0.1.1"
+ICON_FILE="Resources/HyperKey.icns"
 APP_DIR="$APP_NAME.app"
 
 # Build release
@@ -17,6 +18,10 @@ mkdir -p "$APP_DIR/Contents/Resources"
 # Copy binary
 cp ".build/release/$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
 
+# Copy icons
+cp "$ICON_FILE" "$APP_DIR/Contents/Resources/HyperKey.icns"
+cp Resources/MenuBarIcons/*.png "$APP_DIR/Contents/Resources/"
+
 # Create Info.plist
 cat > "$APP_DIR/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -27,6 +32,8 @@ cat > "$APP_DIR/Contents/Info.plist" << EOF
     <string>$APP_NAME</string>
     <key>CFBundleIdentifier</key>
     <string>$BUNDLE_ID</string>
+    <key>CFBundleIconFile</key>
+    <string>HyperKey</string>
     <key>CFBundleName</key>
     <string>$APP_NAME</string>
     <key>CFBundleVersion</key>

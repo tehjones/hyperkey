@@ -5,7 +5,7 @@ struct HyperKeyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("HyperKey", systemImage: "keyboard") {
+        MenuBarExtra("HyperKey", image: "hyperkey-menu-bar-iconTemplate") {
             MenuContent(appDelegate: appDelegate)
         }
     }
