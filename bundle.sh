@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_NAME="HyperKey"
 BUNDLE_ID="com.sergey.hyperkey"
-VERSION="0.1.5"
+VERSION="0.1.6"
 ICON_FILE="Resources/HyperKey.icns"
 APP_DIR="$APP_NAME.app"
 
@@ -50,9 +50,11 @@ cat > "$APP_DIR/Contents/Info.plist" << EOF
 </plist>
 EOF
 
+codesign --force --sign - "$APP_DIR"
+
 echo "Built $APP_DIR"
 echo ""
 echo "To install:"
 echo "  cp -r $APP_DIR /Applications/"
 echo ""
-echo "Then open HyperKey from /Applications and grant Accessibility access when prompted."
+echo "Then open HyperKey from /Applications and follow the setup window."
