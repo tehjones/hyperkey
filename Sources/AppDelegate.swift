@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var appDeactivationObserver: NSObjectProtocol?
     private var didObserveSystemSettings = false
 
+    private static let activePreferenceKey = "isHyperKeyEnabled"
     private static let relaunchGuardKey = "didRelaunchForAccessibilityActivation"
 
     private static let legacyLaunchAgentPath: String = {
@@ -36,11 +37,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Diagnostics.permission("startup \(runtimeSummary) trusted=\(isAccessibilityTrusted)")
 
-        if isAccessibilityTrusted {
+        if isAccessibilityTrusted && isEnabled {
             activate()
         } else {
-            DispatchQueue.main.async { [weak self] in
-                self?.showSetup()
+            HIDUtil.restoreCapsLockMapping()
+            if !isAccessibilityTrusted {
+                DispatchQueue.main.async { [weak self] in
+                    self?.showSetup()
+                }
             }
         }
 
@@ -55,6 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissionTimer?.invalidate()
         relaunchWorkItem?.cancel()
         keyHandler?.stop()
+        if !isRelaunching {
+            HIDUtil.restoreCapsLockMapping()
+        }
 
         if let appActivationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(appActivationObserver)
@@ -62,13 +69,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let appDeactivationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(appDeactivationObserver)
         }
-
-        // We intentionally do not reset the hidutil mapping on quit. Resetting
-        // would wipe unrelated mappings, and macOS clears this mapping on reboot.
     }
 
     private func activate() {
-        guard isAccessibilityTrusted else {
+        guard isAccessibilityTrusted, isEnabled else {
             deactivate()
             return
         }
@@ -95,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func deactivate() {
         keyHandler?.stop()
         keyHandler = nil
+        HIDUtil.restoreCapsLockMapping()
         isActive = false
         updateInterface()
     }
@@ -117,9 +122,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         Diagnostics.permission("permission-granted \(runtimeSummary)")
-        activate()
+        if isEnabled {
+            activate()
+        } else {
+            updateInterface()
+        }
 
-        if !isActive {
+        if isEnabled && !isActive {
             if didObserveSystemSettings || Self.isSystemSettingsFrontmost {
                 isRelaunchPending = true
                 updateInterface()
@@ -149,35 +158,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func rebuildMenu() {
         let menu = NSMenu()
 
-        if isActive {
-            let activeItem = NSMenuItem(title: "HyperKey Active", action: nil, keyEquivalent: "")
-            activeItem.state = .on
-            activeItem.isEnabled = false
-            menu.addItem(activeItem)
-        } else if !isAccessibilityTrusted {
+        if !isAccessibilityTrusted {
             let setupItem = NSMenuItem(
-                title: hasRequestedAccessibility ? "Finish Setting Up HyperKey…" : "Set Up HyperKey…",
+                title: "Set Up HyperKey…",
                 action: #selector(showSetup),
                 keyEquivalent: ""
             )
             setupItem.target = self
             menu.addItem(setupItem)
-        } else if isRelaunchPending || isRelaunching {
-            let finishingItem = NSMenuItem(title: "Finishing Setup…", action: nil, keyEquivalent: "")
-            finishingItem.isEnabled = false
-            menu.addItem(finishingItem)
         } else {
-            let failedItem = NSMenuItem(title: "HyperKey Isn’t Active", action: nil, keyEquivalent: "")
-            failedItem.isEnabled = false
-            menu.addItem(failedItem)
-
-            let retryItem = NSMenuItem(
-                title: "Try Again",
-                action: #selector(retryActivation),
+            let activeItem = NSMenuItem(
+                title: "Active",
+                action: #selector(toggleActive(_:)),
                 keyEquivalent: ""
             )
-            retryItem.target = self
-            menu.addItem(retryItem)
+            activeItem.target = self
+            activeItem.state = isActive ? .on : .off
+            menu.addItem(activeItem)
         }
 
         menu.addItem(.separator())
@@ -198,11 +195,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(showAbout),
             keyEquivalent: ""
         )
+        aboutItem.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
         aboutItem.target = self
         menu.addItem(aboutItem)
 
         menu.addItem(NSMenuItem(
-            title: "Quit",
+            title: "Quit HyperKey",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         ))
@@ -216,6 +214,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if !isAccessibilityTrusted {
             return "HyperKey needs Accessibility permission"
+        }
+        if !isEnabled {
+            return "HyperKey is inactive"
         }
         if isRelaunchPending || isRelaunching {
             return "HyperKey is finishing setup"
@@ -243,6 +244,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SetupView(
             isAccessibilityTrusted: isAccessibilityTrusted,
             isActive: isActive,
+            isEnabled: isEnabled,
             hasRequestedAccessibility: hasRequestedAccessibility,
             isFinishingSetup: isRelaunchPending || isRelaunching,
             onRequestAccessibility: { [weak self] in
@@ -261,6 +263,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func requestAccessibilityPermission() {
+        isEnabled = true
         hasRequestedAccessibility = true
         isRelaunchPending = false
         UserDefaults.standard.set(false, forKey: Self.relaunchGuardKey)
@@ -278,6 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openAccessibilitySettings() {
+        isEnabled = true
         hasRequestedAccessibility = true
         UserDefaults.standard.set(false, forKey: Self.relaunchGuardKey)
         updateInterface()
@@ -297,8 +301,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        isEnabled = true
         UserDefaults.standard.set(false, forKey: Self.relaunchGuardKey)
         isRelaunchPending = false
+        activate()
+        if !isActive {
+            scheduleRelaunch(after: 0.5)
+        }
+    }
+
+    @objc private func toggleActive(_ sender: NSMenuItem) {
+        if isActive || isRelaunchPending || isRelaunching {
+            isEnabled = false
+            relaunchWorkItem?.cancel()
+            relaunchWorkItem = nil
+            isRelaunchPending = false
+            Diagnostics.permission("active-toggled enabled=false \(runtimeSummary)")
+            deactivate()
+            return
+        }
+
+        isEnabled = true
+        UserDefaults.standard.set(false, forKey: Self.relaunchGuardKey)
+        Diagnostics.permission("active-toggled enabled=true \(runtimeSummary)")
         activate()
         if !isActive {
             scheduleRelaunch(after: 0.5)
@@ -399,7 +424,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             Diagnostics.permission("settings-deactivated")
             refreshPermissionState()
-            if !isActive && (isAccessibilityTrusted || hasRequestedAccessibility) {
+            if isEnabled && !isActive && (isAccessibilityTrusted || hasRequestedAccessibility) {
                 didObserveSystemSettings = false
                 Diagnostics.permission(
                     "settings-closed relaunch-required trusted=\(isAccessibilityTrusted) requested=\(hasRequestedAccessibility)"
@@ -425,6 +450,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var isLaunchAtLoginEnabled: Bool {
         SMAppService.mainApp.status == .enabled
+    }
+
+    private var isEnabled: Bool {
+        get {
+            guard UserDefaults.standard.object(forKey: Self.activePreferenceKey) != nil else {
+                return true
+            }
+            return UserDefaults.standard.bool(forKey: Self.activePreferenceKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Self.activePreferenceKey)
+        }
     }
 
     @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {

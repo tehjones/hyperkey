@@ -35,6 +35,7 @@ final class SetupWindowController: NSWindowController {
 struct SetupView: View {
     let isAccessibilityTrusted: Bool
     let isActive: Bool
+    let isEnabled: Bool
     let hasRequestedAccessibility: Bool
     let isFinishingSetup: Bool
     let onRequestAccessibility: () -> Void
@@ -85,7 +86,7 @@ struct SetupView: View {
 
                 Spacer()
 
-                if isActive {
+                if isActive || (isAccessibilityTrusted && !isEnabled) {
                     Button("Done", action: onClose)
                         .keyboardShortcut(.defaultAction)
                 } else if isAccessibilityTrusted && !isFinishingSetup {
@@ -108,6 +109,9 @@ struct SetupView: View {
             return "HyperKey will reopen to finish setup."
         }
         if isAccessibilityTrusted {
+            if !isEnabled {
+                return "HyperKey is inactive. Turn it on from the menu bar."
+            }
             return "Accessibility is allowed, but HyperKey couldn’t start."
         }
         if hasRequestedAccessibility {
