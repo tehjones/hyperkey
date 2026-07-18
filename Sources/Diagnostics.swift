@@ -2,6 +2,7 @@ import Foundation
 
 enum Diagnostics {
     private static let queue = DispatchQueue(label: "com.sergey.hyperkey.diagnostics")
+    private static let maxPermissionLogBytes = 256 * 1024
 
     static func permission(_ message: @autoclosure () -> String) {
         let output = message()
@@ -21,6 +22,7 @@ enum Diagnostics {
         let directory = libraryURL.appendingPathComponent("Logs/HyperKey", isDirectory: true)
         let logURL = directory.appendingPathComponent("permission.log")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        rotatePermissionLogIfNeeded(at: logURL)
 
         guard let data = "\(Date()) \(message)\n".data(using: .utf8) else {
             return
@@ -34,5 +36,18 @@ enum Diagnostics {
         } else {
             try? data.write(to: logURL, options: .atomic)
         }
+    }
+
+    private static func rotatePermissionLogIfNeeded(at logURL: URL) {
+        guard let values = try? logURL.resourceValues(forKeys: [.fileSizeKey]),
+              let fileSize = values.fileSize,
+              fileSize >= maxPermissionLogBytes
+        else {
+            return
+        }
+
+        let rotatedURL = logURL.appendingPathExtension("1")
+        try? FileManager.default.removeItem(at: rotatedURL)
+        try? FileManager.default.moveItem(at: logURL, to: rotatedURL)
     }
 }

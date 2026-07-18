@@ -5,6 +5,7 @@ APP_NAME="HyperKey"
 BUNDLE_ID="com.sergey.hyperkey"
 VERSION="0.1.8"
 ICON_FILE="Resources/HyperKey.icns"
+SIGNING_IDENTITY="${HYPERKEY_SIGNING_IDENTITY:--}"
 APP_DIR="$APP_NAME.app"
 
 # Build release
@@ -50,7 +51,12 @@ cat > "$APP_DIR/Contents/Info.plist" << EOF
 </plist>
 EOF
 
-codesign --force --sign - "$APP_DIR"
+if [ "$SIGNING_IDENTITY" = "-" ]; then
+    echo "WARNING: Signing ad hoc. Accessibility permission will not survive changed builds."
+    echo "Set HYPERKEY_SIGNING_IDENTITY to a stable code-signing identity to preserve it."
+fi
+
+codesign --force --sign "$SIGNING_IDENTITY" "$APP_DIR"
 
 echo "Built $APP_DIR"
 echo ""

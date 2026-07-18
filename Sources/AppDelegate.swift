@@ -4,7 +4,6 @@ import ServiceManagement
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isAccessibilityTrusted = false
     private var isActive = false
-    private var hasRequestedAccessibility = false
     private var isRelaunchPending = false
     private var isRelaunching = false
 
@@ -245,7 +244,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isAccessibilityTrusted: isAccessibilityTrusted,
             isActive: isActive,
             isEnabled: isEnabled,
-            hasRequestedAccessibility: hasRequestedAccessibility,
             isFinishingSetup: isRelaunchPending || isRelaunching,
             onRequestAccessibility: { [weak self] in
                 self?.requestAccessibilityPermission()
@@ -264,7 +262,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func requestAccessibilityPermission() {
         isEnabled = true
-        hasRequestedAccessibility = true
         isRelaunchPending = false
         UserDefaults.standard.set(false, forKey: Self.relaunchGuardKey)
         updateInterface()
@@ -282,7 +279,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openAccessibilitySettings() {
         isEnabled = true
-        hasRequestedAccessibility = true
         UserDefaults.standard.set(false, forKey: Self.relaunchGuardKey)
         updateInterface()
 
@@ -331,7 +327,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func scheduleRelaunch(after delay: TimeInterval) {
-        guard isAppBundleRuntime,
+        guard isAccessibilityTrusted,
+              isEnabled,
+              !isActive,
+              isAppBundleRuntime,
               !isRelaunching,
               !UserDefaults.standard.bool(forKey: Self.relaunchGuardKey)
         else {
@@ -353,7 +352,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func relaunchExactBundle() {
         relaunchWorkItem = nil
-        guard isAppBundleRuntime, !isRelaunching else {
+        isAccessibilityTrusted = AXIsProcessTrusted()
+        guard isAccessibilityTrusted,
+              isEnabled,
+              !isActive,
+              isAppBundleRuntime,
+              !isRelaunching
+        else {
+            isRelaunchPending = false
+            updateInterface()
             return
         }
 
@@ -424,10 +431,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             Diagnostics.permission("settings-deactivated")
             refreshPermissionState()
-            if isEnabled && !isActive && (isAccessibilityTrusted || hasRequestedAccessibility) {
+            if isEnabled && !isActive && isAccessibilityTrusted {
                 didObserveSystemSettings = false
                 Diagnostics.permission(
-                    "settings-closed relaunch-required trusted=\(isAccessibilityTrusted) requested=\(hasRequestedAccessibility)"
+                    "settings-closed relaunch-required trusted=\(isAccessibilityTrusted)"
                 )
                 scheduleRelaunch(after: 0.3)
             } else {
@@ -471,15 +478,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try SMAppService.mainApp.unregister()
             case .requiresApproval:
                 SMAppService.openSystemSettingsLoginItems()
-            case .notRegistered, .notFound:
+            case .notRegistered:
                 try SMAppService.mainApp.register()
+            case .notFound:
+                let message = "macOS could not find HyperKey as a login item. Make sure HyperKey is installed in Applications, then try again."
+                Diagnostics.permission("launch-at-login-not-found")
+                showLaunchAtLoginError(message)
             @unknown default:
-                break
+                let message = "macOS returned an unknown Launch at Login status."
+                Diagnostics.permission("launch-at-login-unknown-status")
+                showLaunchAtLoginError(message)
             }
         } catch {
             Diagnostics.permission("launch-at-login-failed error=\(error)")
+            showLaunchAtLoginError(error.localizedDescription)
         }
         rebuildMenu()
+    }
+
+    private func showLaunchAtLoginError(_ details: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Couldn’t Change Launch at Login"
+        alert.informativeText = details
+        alert.addButton(withTitle: "OK")
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     private func migrateLegacyLaunchAgent() {
@@ -487,12 +511,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard FileManager.default.fileExists(atPath: path) else {
             return
         }
+        let url = URL(fileURLWithPath: path)
+        let service = SMAppService.mainApp
+        let legacyStatus = SMAppService.statusForLegacyPlist(at: url)
 
         do {
-            if SMAppService.mainApp.status == .notRegistered {
-                try SMAppService.mainApp.register()
+            if service.status == .enabled {
+                try FileManager.default.removeItem(at: url)
+                Diagnostics.permission("launch-at-login-migrated")
+                return
             }
-            try FileManager.default.removeItem(atPath: path)
+
+            guard legacyStatus == .enabled else {
+                Diagnostics.permission("launch-at-login-migration-skipped legacy-status=\(legacyStatus)")
+                return
+            }
+
+            switch service.status {
+            case .enabled:
+                break
+            case .notRegistered:
+                try service.register()
+            case .requiresApproval:
+                Diagnostics.permission("launch-at-login-migration-pending-approval")
+                return
+            case .notFound:
+                Diagnostics.permission("launch-at-login-migration-skipped status=not-found")
+                return
+            @unknown default:
+                Diagnostics.permission("launch-at-login-migration-skipped status=unknown")
+                return
+            }
+
+            guard service.status == .enabled else {
+                Diagnostics.permission("launch-at-login-migration-waiting status=\(service.status)")
+                return
+            }
+
+            try FileManager.default.removeItem(at: url)
+            Diagnostics.permission("launch-at-login-migrated")
         } catch {
             Diagnostics.permission("launch-at-login-migration-failed error=\(error)")
         }

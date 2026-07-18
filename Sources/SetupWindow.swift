@@ -10,7 +10,7 @@ final class SetupWindowController: NSWindowController {
         window.title = "Set Up HyperKey"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 520, height: 350))
+        window.setContentSize(NSSize(width: 520, height: 380))
         window.center()
 
         self.hostingController = hostingController
@@ -36,7 +36,6 @@ struct SetupView: View {
     let isAccessibilityTrusted: Bool
     let isActive: Bool
     let isEnabled: Bool
-    let hasRequestedAccessibility: Bool
     let isFinishingSetup: Bool
     let onRequestAccessibility: () -> Void
     let onOpenSettings: () -> Void
@@ -63,8 +62,7 @@ struct SetupView: View {
 
             PermissionCard(
                 isGranted: isAccessibilityTrusted,
-                actionTitle: hasRequestedAccessibility ? "Open Settings…" : "Allow…",
-                onAction: hasRequestedAccessibility ? onOpenSettings : onRequestAccessibility
+                onAllow: onRequestAccessibility
             )
             .padding(.top, 26)
 
@@ -86,7 +84,9 @@ struct SetupView: View {
 
                 Spacer()
 
-                if isActive || (isAccessibilityTrusted && !isEnabled) {
+                if !isAccessibilityTrusted {
+                    Button("Open System Settings…", action: onOpenSettings)
+                } else if isActive || !isEnabled {
                     Button("Done", action: onClose)
                         .keyboardShortcut(.defaultAction)
                 } else if isAccessibilityTrusted && !isFinishingSetup {
@@ -97,7 +97,7 @@ struct SetupView: View {
             .padding(.top, 16)
         }
         .padding(30)
-        .frame(width: 520, height: 350)
+        .frame(width: 520, height: 380)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -114,17 +114,13 @@ struct SetupView: View {
             }
             return "Accessibility is allowed, but HyperKey couldn’t start."
         }
-        if hasRequestedAccessibility {
-            return "In System Settings, turn HyperKey on. If it isn’t listed, click + and choose HyperKey from Applications."
-        }
-        return "HyperKey uses Accessibility only to handle your keyboard shortcuts."
+        return "Click Allow to add HyperKey. It uses Accessibility only to handle your keyboard shortcuts."
     }
 }
 
 private struct PermissionCard: View {
     let isGranted: Bool
-    let actionTitle: String
-    let onAction: () -> Void
+    let onAllow: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
@@ -151,7 +147,8 @@ private struct PermissionCard: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.green)
             } else {
-                Button(actionTitle, action: onAction)
+                Button("Allow…", action: onAllow)
+                    .accessibilityLabel("Allow Accessibility")
             }
         }
         .padding(16)
