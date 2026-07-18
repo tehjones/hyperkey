@@ -1,10 +1,10 @@
 import AppKit
-import Combine
 
-final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
-    @Published var isActive = false
-    var keyHandler: KeyHandler?
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var isActive = false
+    private var keyHandler: KeyHandler?
     private var permissionTimer: Timer?
+    private var statusItem: NSStatusItem!
 
     private static let bundleID = Bundle.main.bundleIdentifier ?? "com.sergey.hyperkey"
 
@@ -13,10 +13,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         return "\(home)/Library/LaunchAgents/\(bundleID).plist"
     }()
 
-    @Published var launchAtLogin = false
+    private var launchAtLogin = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         launchAtLogin = FileManager.default.fileExists(atPath: Self.launchAgentPath)
+
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        updateIcon()
+        rebuildMenu()
+
         if !AXIsProcessTrusted() {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             AXIsProcessTrustedWithOptions(options)
@@ -57,16 +62,96 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         if keyHandler?.isRunning == true {
             HIDUtil.remapCapsLockToF19()
             isActive = true
+        } else {
+            isActive = false
         }
+
+        updateIcon()
+        rebuildMenu()
     }
 
     private func deactivate() {
         keyHandler?.stop()
         keyHandler = nil
         isActive = false
+        updateIcon()
+        rebuildMenu()
     }
 
-    func setLaunchAtLogin(_ enabled: Bool) {
+    private func updateIcon() {
+        let image = Bundle.main.image(forResource: NSImage.Name("hyperkey-menu-bar-iconTemplate"))
+            ?? NSImage(systemSymbolName: "keyboard", accessibilityDescription: "HyperKey")
+        image?.size = NSSize(width: 18, height: 18)
+        image?.isTemplate = true
+
+        statusItem.button?.image = image
+        statusItem.button?.setAccessibilityLabel("HyperKey")
+        statusItem.button?.toolTip = isActive
+            ? "HyperKey is active"
+            : "HyperKey needs Accessibility permission"
+    }
+
+    private func rebuildMenu() {
+        let menu = NSMenu()
+
+        let statusTitle = isActive
+            ? "Active"
+            : "Inactive — check Accessibility permissions"
+        let statusMenuItem = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
+        statusMenuItem.state = isActive ? .on : .off
+        statusMenuItem.isEnabled = false
+        menu.addItem(statusMenuItem)
+
+        menu.addItem(.separator())
+
+        let launchAtLoginItem = NSMenuItem(
+            title: "Launch at Login",
+            action: #selector(toggleLaunchAtLogin(_:)),
+            keyEquivalent: ""
+        )
+        launchAtLoginItem.target = self
+        launchAtLoginItem.state = launchAtLogin ? .on : .off
+        menu.addItem(launchAtLoginItem)
+
+        menu.addItem(.separator())
+
+        let aboutItem = NSMenuItem(
+            title: "About HyperKey",
+            action: #selector(showAbout),
+            keyEquivalent: ""
+        )
+        aboutItem.target = self
+        menu.addItem(aboutItem)
+
+        menu.addItem(NSMenuItem(
+            title: "Quit",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        ))
+
+        statusItem.menu = menu
+    }
+
+    @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {
+        setLaunchAtLogin(sender.state != .on)
+        rebuildMenu()
+    }
+
+    @objc private func showAbout() {
+        NSApplication.shared.orderFrontStandardAboutPanel(options: [
+            .applicationName: "HyperKey",
+            .applicationVersion: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleShortVersionString"
+            ) as? String ?? "unknown",
+            .credits: NSAttributedString(
+                string: "Caps Lock → Hyper key (hold) / F19 (tap)",
+                attributes: [.font: NSFont.systemFont(ofSize: 11)]
+            ),
+        ])
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
         let path = Self.launchAgentPath
         if enabled {
             let plist: [String: Any] = [
