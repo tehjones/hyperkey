@@ -1,3 +1,7 @@
+<p align="left">
+  <img src="Resources/HyperKey.iconset/icon_512x512.png" width="128" height="128" alt="HyperKey app icon">
+</p>
+
 # HyperKey
 
 HyperKey is a minimal macOS menu bar app that turns Caps Lock into a dual-purpose key:
@@ -10,6 +14,10 @@ HyperKey is a minimal macOS menu bar app that turns Caps Lock into a dual-purpos
 
 - macOS 13 or later
 - Accessibility permission
+
+## Download
+
+Grab the latest release from [GitHub Releases](https://github.com/tehjones/hyperkey/releases/latest), unzip, and move `HyperKey.app` to `/Applications`. On first launch, right-click the app and choose **Open** — it is ad-hoc signed, so Gatekeeper will warn.
 
 ## Build
 

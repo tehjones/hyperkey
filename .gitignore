@@ -3,3 +3,4 @@
 .build/
 .swiftpm/
 HyperKey.app/
+HyperKey-*.zip
