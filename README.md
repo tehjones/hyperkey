@@ -39,6 +39,10 @@ Open HyperKey and grant Accessibility access when macOS prompts you. You can the
 
 HyperKey remaps Caps Lock to F19 with `hidutil` while it is active. When HyperKey quits, it restores the Caps Lock mapping that was in place before it started.
 
+## Sponsors
+
+- **EzTranslate** — [翻譯拍照](https://eztranslate.com.tw/)，快速又精準
+
 ## License
 
 [MIT](LICENSE)
