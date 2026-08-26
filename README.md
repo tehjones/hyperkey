@@ -42,6 +42,7 @@ HyperKey remaps Caps Lock to F19 with `hidutil` while it is active. When HyperKe
 ## Sponsors
 
 - **EzTranslate** — [翻譯拍照](https://eztranslate.com.tw/)，快速又精準
+- [**Epub Translator**](https://epubtranslator.net/) — Translate complete EPUB books online
 
 ## License
 
