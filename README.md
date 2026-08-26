@@ -17,7 +17,7 @@ HyperKey is a minimal macOS menu bar app that turns Caps Lock into a dual-purpos
 
 ## Download
 
-Grab the latest release from [GitHub Releases](https://github.com/thefelixl/hyperkey/releases/latest), unzip, and move `HyperKey.app` to `/Applications`. On first launch, right-click the app and choose **Open** — it is ad-hoc signed, so Gatekeeper will warn.
+Grab the latest release from [GitHub Releases](https://github.com/indiemaze/hyperkey/releases/latest), unzip, and move `HyperKey.app` to `/Applications`. On first launch, right-click the app and choose **Open** — it is ad-hoc signed, so Gatekeeper will warn.
 
 ## Build
 
